@@ -1,6 +1,9 @@
 var React = require('react');
+var Mock  = require('mockjs');
 var ReactNative = require('react-native');
 var Icon = require('react-native-vector-icons/Ionicons');
+var Config = require('../common/config');
+var Request = require('../common/request');
 
 var {
   StyleSheet,
@@ -9,66 +12,124 @@ var {
   ListView,
   TouchableHighlight,
   Image,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  RefreshControl
 } = ReactNative;
 var {height, width} = Dimensions.get('window');
+
+var cachedResults = {
+  nextPage:1,
+  items:[],
+  total:0
+}
 
 var List = React.createClass({
 
   getInitialState(){
-    const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+    const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1._id !== r2._id});
     return {
-      dataSource: ds.cloneWithRows([{
-            "_id": "130000200701063844",
-            "thumb": "https://img.alicdn.com/imgextra/i2/197232874/TB2xCa7pXXXXXXfXFXXXXXXXXXX_!!197232874.jpg_430x430q90.jpg",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "630000199210109329",
-            "thumb": "https://facebook.github.io/react/img/logo_og.png",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "360000201507108049",
-            "thumb": "https://facebook.github.io/react/img/logo_og.png",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "220000198407297617",
-            "thumb": "https://facebook.github.io/react/img/logo_small_2x.png",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "610000198101167185",
-            "thumb": "http://dummyimage.com/1200x600/06dff4",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "330000200402166023",
-            "thumb": "http://dummyimage.com/1200x600/103de8.png",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "510000198301125613",
-            "thumb": "http://dummyimage.com/1200x600/320f2a)",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "330000198507103774",
-            "thumb": "http://dummyimage.com/1200x600/ebd43c)",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "230000199201168437",
-            "thumb": "http://dummyimage.com/1200x600/24924c)",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        },
-        {
-            "_id": "460000197302152470",
-            "thumb": "http://dummyimage.com/1200x600/5d8f2f)",
-            "video": "http://v2.mukewang.com/f324923b-42c7-49d0-884c-c8d0e2c60dac/L.mp4?auth_key=1473341528-0-0-50b8783e5296ee091ef63eeb36bfb357"
-        }])
+      isRefreshing:false,
+      isLoadingTail:false,
+      dataSource: ds
     };
+  },
+
+  componentDidMount() {
+    this._fetchData();
+  },
+
+  _fetchData(page) {
+    if (page!=0) {
+      this.setState({
+        isLoadingTail:true
+      })
+    } else {
+      this.setState({
+        isRefreshing:true
+      })
+    }
+    
+
+    var that = this;
+
+    Request.get(Config.api.base + Config.api.creations,{accessToken:'ssd'})
+    .then((data) => {
+          if (data.success) {
+            var items = cachedResults.items.slice();
+            
+            
+            cachedResults.total = data.total;
+
+
+            if (page != 0) {
+              items = items.concat(data.data);
+              cachedResults.items = items;
+              cachedResults.nextPage = cachedResults.nextPage + 1;
+              setTimeout(function(){
+                    that.setState({
+                  isLoadingTail:false,
+                  dataSource: that.state.dataSource.cloneWithRows(cachedResults.items)
+                });
+              }, 2000)
+            } else  {
+             items = data.data.concat(items);
+             cachedResults.items = items;
+             setTimeout(function(){
+                    that.setState({
+                  isRefreshing:false,
+                  dataSource: that.state.dataSource.cloneWithRows(cachedResults.items)
+                });
+              }, 2000)
+            }
+             
+              
+          }
+          console.log(data);
+        })
+        .catch((error) => {
+              this.setState({
+                isLoadingTail:false,
+              });
+          console.error(error);
+        });
+  },
+
+  _hasMore(){
+    return cachedResults.items.length !== cachedResults.total;
+  },
+
+  _fecthMoreData() {
+    if (!this._hasMore() || this.state.isLoadingTail) {
+      return;
+    }
+    this._fetchData();
+    var page = cachedResults.nextPage;
+  },
+
+  _renderFooter() {
+      if (!this._hasMore() && cachedResults.total !== 0) {
+        return (
+          <View style={styles.loadingMore}>
+          <Text style={styles.loadingText}>没有更多了</Text>
+          </View>
+        )
+      }
+
+      return (
+        <ActivityIndicator
+          color="#0000ff"
+          size="large"
+        />
+        );
+
+  },
+
+  _onRefresh:function(){
+    if (!this._hasMore() || this.state.isRefreshing) {
+      return;
+    }
+    this._fetchData(0);
   },
 
   renderRow:function(row){
@@ -76,7 +137,7 @@ var List = React.createClass({
     return (
       <TouchableHighlight>
         <View style={styles.item}>
-          <Text style={styles.title}>{row._id}</Text>
+          <Text style={styles.title}>{row.title}</Text>
           <Image source={{uri: row.thumb}} style={styles.thumb}>
             <Icon
               name='ios-play'
@@ -117,7 +178,19 @@ var List = React.createClass({
         <ListView
           dataSource={this.state.dataSource}
           renderRow={this.renderRow}
+          renderFooter={this._renderFooter}
           enableEmptySections={true}
+          refreshControl={
+            <RefreshControl
+              refreshing={this.state.isRefreshing}
+              onRefresh={this._onRefresh}
+              tintColor="#ff6600"
+              title="加载中..."
+              titleColor="#cccccc"
+            />
+          }
+          onEndReached={this._fecthMoreData}
+          onEndReachedThreshold = {20}
           automaticallyAdjustContentInsets={false}
         />
       </View>
@@ -202,6 +275,13 @@ var styles = StyleSheet.create({
   commentIcon:{
     fontSize:22,
     color:'#333'
+  },
+  loadingMore:{
+    marginVertical:20
+  },
+  loadingText:{
+    color:'#777',
+    textAlign:'center'
   }
 });
 
